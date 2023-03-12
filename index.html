@@ -1,81 +1,115 @@
 <!DOCTYPE html>
 <html>
 <head>
-	<title>Video Call Site with WebRTC</title>
-	<script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
+	<title>Chrome Dinosaur Game</title>
 	<style>
-		#localVideo, #remoteVideo {
-			width: 50%;
-			height: 50%;
-			border: 1px solid black;
+		body {
+			background-color: #F9E4B7;
+		}
+		#game {
+			position: absolute;
+			top: 50%;
+			left: 50%;
+			transform: translate(-50%, -50%);
+			background-color: #FFFFFF;
+			border: 2px solid #000000;
+			padding: 10px;
+			width: 600px;
+			height: 200px;
+			overflow: hidden;
+			box-shadow: 5px 5px 5px #888888;
+		}
+		#cactus {
+			position: absolute;
+			top: 140px;
+			left: 590px;
+			background-color: #8F9779;
+			width: 20px;
+			height: 60px;
+			animation: cactus 2s linear infinite;
+		}
+		@keyframes cactus {
+			0% {
+				left: 590px;
+			}
+			100% {
+				left: -20px;
+			}
+		}
+		#dino {
+			position: absolute;
+			top: 120px;
+			left: 50px;
+			background-color: #F4A460;
+			width: 40px;
+			height: 50px;
+			animation: jump 0.3s linear;
+			animation-fill-mode: forwards;
+		}
+		@keyframes jump {
+			0% {
+				top: 120px;
+			}
+			50% {
+				top: 80px;
+			}
+			100% {
+				top: 120px;
+			}
+		}
+		#score {
+			position: absolute;
+			top: 10px;
+			right: 10px;
+			font-size: 20px;
 		}
 	</style>
 </head>
 <body>
-	<h1>Video Call Site with WebRTC</h1>
-	<div>
-		<h2>Local Video</h2>
-		<video id="localVideo" autoplay></video>
+	<div id="game">
+		<div id="dino"></div>
+		<div id="cactus"></div>
 	</div>
-	<div>
-		<h2>Remote Video</h2>
-		<video id="remoteVideo" autoplay></video>
-	</div>
+	<div id="score">Score: 0</div>
 	<script>
-		// Set up the WebRTC peer connection
-		const peerConnection = new RTCPeerConnection();
+		// Game variables
+		let gameScore = 0;
+		let gameSpeed = 10;
+		let cactusInterval = null;
+		let gameRunning = false;
 
-		// Set up the local video stream
-		navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-			.then(localStream => {
-				const localVideo = document.getElementById('localVideo');
-				localVideo.srcObject = localStream;
-				localStream.getTracks().forEach(track => {
-					peerConnection.addTrack(track, localStream);
-				});
-			});
+		// Get game elements
+		const game = document.getElementById("game");
+		const dino = document.getElementById("dino");
+		const cactus = document.getElementById("cactus");
+		const score = document.getElementById("score");
 
-		// Set up the remote video stream
-		peerConnection.ontrack = event => {
-			const remoteVideo = document.getElementById('remoteVideo');
-			if (!remoteVideo.srcObject) {
-				remoteVideo.srcObject = event.streams[0];
-			}
-		};
+		// Start the game
+		function startGame() {
+			gameRunning = true;
+			cactusInterval = setInterval(moveCactus, gameSpeed);
+			document.addEventListener("keydown", jumpDino);
+		}
 
-		// Set up the signaling channel
-		const socket = new WebSocket('ws://localhost:8080');
-		socket.onmessage = event => {
-			if (event.data.type === 'offer') {
-				// Set up the offer and create the answer
-				peerConnection.setRemoteDescription(new RTCSessionDescription(event.data));
-				peerConnection.createAnswer()
-					.then(answer => {
-						peerConnection.setLocalDescription(answer);
-						socket.send(JSON.stringify(answer));
-					});
-			} else if (event.data.type === 'answer') {
-				// Set up the answer
-				peerConnection.setRemoteDescription(new RTCSessionDescription(event.data));
-			} else if (event.data.type === 'candidate') {
-				// Add the ICE candidate
-				peerConnection.addIceCandidate(new RTCIceCandidate(event.data));
-			}
-		};
+		// Stop the game
+		function stopGame() {
+			gameRunning = false;
+			clearInterval(cactusInterval);
+			document.removeEventListener("keydown", jumpDino);
+			alert(`Game over! Your score is ${gameScore}`);
+			resetGame();
+		}
 
-		// Send the offer
-		peerConnection.createOffer()
-			.then(offer => {
-				peerConnection.setLocalDescription(offer);
-				socket.send(JSON.stringify(offer));
-			});
+		// Reset the game
+		function resetGame() {
+			gameScore = 0;
+			score.innerText = `Score: ${gameScore}`;
+			dino.style.top = "120px";
+			cactus.style.left = "590px";
+		}
 
-		// Handle ICE candidates
-		peerConnection.onicecandidate = event => {
-			if (event.candidate) {
-				socket.send(JSON.stringify(event.candidate));
-			}
-		};
-	</script>
-</body>
-</html>
+		// Move the cactus
+		function moveCactus() {
+			let cactusLeft = parseInt(window.getComputedStyle(cactus).getPropertyValue("left"));
+			if (cactusLeft <= 0) {
+				gameScore
