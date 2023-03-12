@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Video Call Site with WebRTC</title>
+	<script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
+	<style>
+		#localVideo, #remoteVideo {
+			width: 50%;
+			height: 50%;
+			border: 1px solid black;
+		}
+	</style>
+</head>
+<body>
+	<h1>Video Call Site with WebRTC</h1>
+	<div>
+		<h2>Local Video</h2>
+		<video id="localVideo" autoplay></video>
+	</div>
+	<div>
+		<h2>Remote Video</h2>
+		<video id="remoteVideo" autoplay></video>
+	</div>
+	<script>
+		// Set up the WebRTC peer connection
+		const peerConnection = new RTCPeerConnection();
+
+		// Set up the local video stream
+		navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+			.then(localStream => {
+				const localVideo = document.getElementById('localVideo');
+				localVideo.srcObject = localStream;
+				localStream.getTracks().forEach(track => {
+					peerConnection.addTrack(track, localStream);
+				});
+			});
+
+		// Set up the remote video stream
+		peerConnection.ontrack = event => {
+			const remoteVideo = document.getElementById('remoteVideo');
+			if (!remoteVideo.srcObject) {
+				remoteVideo.srcObject = event.streams[0];
+			}
+		};
+
+		// Set up the signaling channel
+		const socket = new WebSocket('ws://localhost:8080');
+		socket.onmessage = event => {
+			if (event.data.type === 'offer') {
+				// Set up the offer and create the answer
+				peerConnection.setRemoteDescription(new RTCSessionDescription(event.data));
+				peerConnection.createAnswer()
+					.then(answer => {
+						peerConnection.setLocalDescription(answer);
+						socket.send(JSON.stringify(answer));
+					});
+			} else if (event.data.type === 'answer') {
+				// Set up the answer
+				peerConnection.setRemoteDescription(new RTCSessionDescription(event.data));
+			} else if (event.data.type === 'candidate') {
+				// Add the ICE candidate
+				peerConnection.addIceCandidate(new RTCIceCandidate(event.data));
+			}
+		};
+
+		// Send the offer
+		peerConnection.createOffer()
+			.then(offer => {
+				peerConnection.setLocalDescription(offer);
+				socket.send(JSON.stringify(offer));
+			});
+
+		// Handle ICE candidates
+		peerConnection.onicecandidate = event => {
+			if (event.candidate) {
+				socket.send(JSON.stringify(event.candidate));
+			}
+		};
+	</script>
+</body>
+</html>
